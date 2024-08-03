@@ -34,7 +34,7 @@ bot.onText(/\/start/, (msg) => {
         [{ text: 'ডিপোজিট করার নিয়ম', callback_data: 'deposit' }],
         [{ text: 'উইথড্র করতে চাই', callback_data: 'withdraw' }],
         [{ text: 'একাউন্ট খুলতে চাই', callback_data: 'open_account' }],
-        [{ text: 'আমাদের গ্রুপ, url: 'https://t.me/QuickPay_Melbet' }]
+        [{ text: 'আমাদের গ্রুপ, url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
       ]
     }
   };
@@ -81,7 +81,7 @@ bot.on('callback_query', (callbackQuery) => {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
-          [{ text: 'আমাদের গ্রুপের লিংক, url: 'https://t.me/YourAdminUsername' }] // Replace with your admin contact link
+          [{ text: 'আমাদের গ্রুপের লিংক, url: 'https://t.me/+oEELDaKLmzkxNDY1' }] // Replace with your admin contact link
         ]
       }
     });
@@ -127,7 +127,7 @@ bot.on('message', (msg) => {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
-          [{ text: 'Contact Admin', url: 'https://t.me/YourAdminUsername' }] // Replace with your admin contact link
+          [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }] // Replace with your admin contact link
         ]
       }
     });
