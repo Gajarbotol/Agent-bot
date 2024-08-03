@@ -34,7 +34,7 @@ bot.onText(/\/start/, (msg) => {
         [{ text: 'ডিপোজিট করার নিয়ম', callback_data: 'deposit' }],
         [{ text: 'উইথড্র করতে চাই', callback_data: 'withdraw' }],
         [{ text: 'একাউন্ট খুলতে চাই', callback_data: 'open_account' }],
-        [{ text: 'আমাদের গ্রুপ, url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
+        [{ text: 'আমাদের গ্রুপ', url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
       ]
     }
   };
@@ -81,18 +81,14 @@ bot.on('callback_query', (callbackQuery) => {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
-          [{ text: 'আমাদের গ্রুপের লিংক, url: 'https://t.me/+oEELDaKLmzkxNDY1' }] // Replace with your admin contact link
+          [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }] // Replace with your admin contact link
         ]
       }
     });
   } else if (callbackQuery.data === 'open_account') {
-    bot.sendMessage(chatId, '*🎥 একাউন্ট খুলতে চাই*', {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: 'Watch Video', url: 'https://www.example.com/your-video-url' }] // Replace with your video URL
-        ]
-      }
+    const videoUrl = 'https://www.example.com/your-video-url'; // Replace with your actual video URL
+    bot.sendVideo(chatId, videoUrl, {
+      caption: '🎥 একাউন্ট খুলতে চাই'
     });
   }
 });
