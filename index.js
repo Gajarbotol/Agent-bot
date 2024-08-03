@@ -73,7 +73,7 @@ bot.on('callback_query', (callbackQuery) => {
 📢 চার্জ 0%, সেন্ডমানি যত দিবেন তত পাবেন।
 👇ডিপোজিট উইথড্র নিতে মেসেজ দিন 👇
 ** এগুলো দিলে ৫মিনিটের ভিতর টাকা আপনার প্লেয়ার একাউন্টে এড হয়ে যাবে ।`;
-    const imageUrl = 'https://static.wikia.nocookie.net/chainsaw-man/images/7/7e/Makima_Infobox.png/revision/latest?cb=20231222210148'; // Replace with your image URL
+    const imageUrl = 'https://raw.githubusercontent.com/Gajarbotol/Agent-bot/main/IMG_20240804_010336_063.jpg'; // Replace with your image URL
     bot.sendMessage(chatId, `*${depositText}*`, { parse_mode: 'Markdown' });
     bot.sendPhoto(chatId, imageUrl);
   } else if (callbackQuery.data === 'withdraw') {
