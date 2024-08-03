@@ -1,9 +1,12 @@
+const express = require('express');
+const bodyParser = require('body-parser');
 const TelegramBot = require('node-telegram-bot-api');
 const admin = require('firebase-admin');
 const serviceAccount = require('./firebase-service-account.json'); // Path to your Firebase service account JSON
 
-const token = '7331421359:AAGSxTEtKQ8U_ZwY_q3eikyECEAQclhB8qs'; // Replace with your bot token
-const adminChatIds = ['5197344486', 'SECOND_ADMIN_CHAT_ID']; // Replace with your admin chat IDs
+const token = process.env.TELEGRAM_BOT_TOKEN; // Use environment variable for bot token
+const adminChatIds = [process.env.ADMIN_CHAT_ID_1, process.env.ADMIN_CHAT_ID_2]; // Use environment variables for admin chat IDs
+const webhookUrl = process.env.WEBHOOK_URL; // Your webhook URL
 
 // Initialize Firebase
 admin.initializeApp({
@@ -12,14 +15,34 @@ admin.initializeApp({
 });
 
 const db = admin.database();
-const bot = new TelegramBot(token, { polling: true });
+const bot = new TelegramBot(token);
 
-// Command to start interaction with the bot
-bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
-  const userFullName = `${msg.from.first_name} ${msg.from.last_name || ''}`.trim();
+// Set up the webhook
+bot.setWebHook(`${webhookUrl}/bot${token}`);
 
-  // Save user to Firebase
+// Express app setup
+const app = express();
+app.use(bodyParser.json());
+
+app.post(`/bot${token}`, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
+
+const welcomeMessage = `👇👇 আমাদের সার্ভিস 👇👇
+
+🌹আমাদের সার্ভিস রাত দিন ২৪ঘন্টা
+
+🌹সর্বনিম্ম ডিপোজিট = ৫০টাকা
+
+🌹সর্বনিম্ন উইথড্র = ১৫০ টাকা
+
+📢 চার্জ 0%, আপনি যত টাকা দিবেন তত পাবেন 📢
+
+📢 আমরা 1xbet এর Verified এজেন্ট । অন্যদের কাছে প্রতারিত না হয়ে আমাদের সাথে লেনদেন করেন। 👇👇`;
+
+// Save user to Firebase
+const saveUser = (chatId, userFullName) => {
   db.ref(`users/${chatId}`).set({
     name: userFullName
   }, (error) => {
@@ -27,6 +50,14 @@ bot.onText(/\/start/, (msg) => {
       console.error('Error saving user to Firebase:', error);
     }
   });
+};
+
+// Handle start command
+bot.onText(/\/start/, (msg) => {
+  const chatId = msg.chat.id;
+  const userFullName = `${msg.from.first_name} ${msg.from.last_name || ''}`.trim();
+
+  saveUser(chatId, userFullName);
 
   const options = {
     reply_markup: {
@@ -39,28 +70,17 @@ bot.onText(/\/start/, (msg) => {
     }
   };
 
-  const welcomeMessage = `👇👇 আমাদের সার্ভিস 👇👇
-
-🌹আমাদের সার্ভিস রাত দিন ২৪ঘন্টা
-
-🌹সর্বনিম্ম ডিপোজিট = ৫০টাকা
-
-🌹সর্বনিম্ন উইথড্র = ১৫০ টাকা
-
-📢 চার্জ 0%, আপনি যত টাকা দিবেন তত পাবেন 📢
-
-📢 আমরা 1xbet এর Verified এজেন্ট । অন্যদের কাছে প্রতারিত না হয়ে আমাদের সাথে লেনদেন করেন। 👇👇`;
-
   bot.sendMessage(chatId, `*${welcomeMessage}*`, { parse_mode: 'Markdown', ...options });
 });
 
-// Handle inline keyboard button clicks
+// Handle callback queries
 bot.on('callback_query', (callbackQuery) => {
   const message = callbackQuery.message;
   const chatId = message.chat.id;
 
-  if (callbackQuery.data === 'deposit') {
-    const depositText = `👇আমাদের থেকে ডিপোজিট করার নিয়ম👇
+  switch (callbackQuery.data) {
+    case 'deposit':
+      const depositText = `👇আমাদের থেকে ডিপোজিট করার নিয়ম👇
 
 🙋‍♀️শুনেন ভাই,
 আমরা বিকাশ নগদ Personal সিমে টাকা রিসিব করি।
@@ -73,27 +93,30 @@ bot.on('callback_query', (callbackQuery) => {
 📢 চার্জ 0%, সেন্ডমানি যত দিবেন তত পাবেন।
 👇ডিপোজিট উইথড্র নিতে মেসেজ দিন 👇
 ** এগুলো দিলে ৫মিনিটের ভিতর টাকা আপনার প্লেয়ার একাউন্টে এড হয়ে যাবে ।`;
-    const imageUrl = 'https://raw.githubusercontent.com/Gajarbotol/Agent-bot/main/IMG_20240804_010336_063.jpg'; // Replace with your image URL
-    bot.sendMessage(chatId, `*${depositText}*`, { parse_mode: 'Markdown' });
-    bot.sendPhoto(chatId, imageUrl);
-  } else if (callbackQuery.data === 'withdraw') {
-    bot.sendMessage(chatId, '*🚫আমাদের এজেন্ট যে Address দিবে এটাতে দিবেন, জিজ্ঞাসা করা ছাড়া উইথড্র দিবেন না।\n\n* উইথড্র করতে চাইলে আমাদের বলবেন আমি ১৫০ টাকা বা এর বেশি টাকা বিকাশ নগদ বা রকেটের মাধ্যমে উইথড্র নিতে চাই।*', {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }] // Replace with your admin contact link
-        ]
-      }
-    });
-  } else if (callbackQuery.data === 'open_account') {
-    const videoUrl = 'https://raw.githubusercontent.com/Gajarbotol/Agent-bot/main/4_5955230751589926051%20(1).mp4'; // Replace with your actual video URL
-    bot.sendVideo(chatId, videoUrl, {
-      caption: '🎥 একাউন্ট খুলতে চাই'
-    });
+      const imageUrl = 'https://raw.githubusercontent.com/Gajarbotol/Agent-bot/main/IMG_20240804_010336_063.jpg'; // Replace with your image URL
+      bot.sendMessage(chatId, `*${depositText}*`, { parse_mode: 'Markdown' });
+      bot.sendPhoto(chatId, imageUrl);
+      break;
+    case 'withdraw':
+      bot.sendMessage(chatId, '*🚫 আমাদের এজেন্ট যে Address দিবে এটাতে দিবেন, জিজ্ঞাসা করা ছাড়া উইথড্র দিবেন না।\n\nউইথড্র করতে চাইলে আমাদের বলবেন আমি ১৫০ টাকা বা এর বেশি টাকা বিকাশ নগদ বা রকেটের মাধ্যমে উইথড্র নিতে চাই।*', {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
+          ]
+        }
+      });
+      break;
+    case 'open_account':
+      const videoUrl = 'https://raw.githubusercontent.com/Gajarbotol/Agent-bot/main/4_5955230751589926051%20(1).mp4'; // Replace with your actual video URL
+      bot.sendVideo(chatId, videoUrl, {
+        caption: '🎥 একাউন্ট খুলতে চাই'
+      });
+      break;
   }
 });
 
-// Handle messages from users
+// Handle user messages
 bot.on('message', (msg) => {
   const chatId = msg.chat.id;
 
@@ -193,4 +216,7 @@ bot.onText(/\/admin/, (msg) => {
   }
 });
 
-console.log('Bot is running...');
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Bot is listening on port ${port}`);
+});
