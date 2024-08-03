@@ -86,7 +86,7 @@ bot.on('callback_query', (callbackQuery) => {
       }
     });
   } else if (callbackQuery.data === 'open_account') {
-    const videoUrl = 'https://www.example.com/your-video-url'; // Replace with your actual video URL
+    const videoUrl = 'https://raw.githubusercontent.com/Gajarbotol/Agent-bot/main/4_5955230751589926051%20(1).mp4'; // Replace with your actual video URL
     bot.sendVideo(chatId, videoUrl, {
       caption: '🎥 একাউন্ট খুলতে চাই'
     });
