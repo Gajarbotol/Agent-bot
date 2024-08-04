@@ -1,18 +1,33 @@
 {
-  "name": "telegram-firebase-bot",
+  "name": "telegram-bot",
   "version": "1.0.0",
-  "description": "A Telegram bot integrated with Firebase.",
+  "description": "A Telegram bot integrated with Firebase",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "dependencies": {
-    "firebase-admin": "^11.8.0",
-    "node-telegram-bot-api": "^0.60.0"
-  },
   "engines": {
     "node": ">=14.0.0"
   },
-  "author": "",
-  "license": "ISC"
+  "dependencies": {
+    "express": "^4.17.1",
+    "firebase-admin": "^11.0.1",
+    "node-telegram-bot-api": "^0.57.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/your-repo.git"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "firebase",
+    "express"
+  ],
+  "author": "Your Name",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/yourusername/your-repo/issues"
+  },
+  "homepage": "https://github.com/yourusername/your-repo#readme"
 }
