@@ -103,9 +103,12 @@ bot.on('callback_query', (callbackQuery) => {
       });
       break;
     case 'open_account':
-      const videoUrl = 'https://raw.githubusercontent.com/Gajarbotol/Agent-bot/main/4_5955230751589926051%20(1).mp4'; // Replace with your actual video URL
-      bot.sendVideo(chatId, videoUrl, {
-        caption: '🎥 একাউন্ট খুলতে চাই'
+      bot.sendMessage(chatId, 'একাউন্ট তৈরি করতে এডমিনের সাথে যোগাযোগ করুন', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'এডমিনের সাথে যোগাযোগ', url: 'https://sahariyerefty.t.me' }]
+          ]
+        }
       });
       break;
   }
