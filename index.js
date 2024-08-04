@@ -106,7 +106,7 @@ bot.on('callback_query', (callbackQuery) => {
       bot.sendMessage(chatId, 'একাউন্ট তৈরি করতে এডমিনের সাথে যোগাযোগ করুন', {
         reply_markup: {
           inline_keyboard: [
-            [{ text: 'এডমিনের সাথে যোগাযোগ', url: 'https://sahariyerefty.t.me' }]
+            [{ text: 'এডমিনের সাথে যোগাযোগ', url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
           ]
         }
       });
@@ -115,6 +115,7 @@ bot.on('callback_query', (callbackQuery) => {
 });
 
 const lastSentTimes = {};
+const bannedUsers = {}; // To store banned users
 
 // Handle user messages
 bot.on('message', (msg) => {
@@ -122,6 +123,12 @@ bot.on('message', (msg) => {
 
   // Ignore messages from admin chat IDs
   if (adminChatIds.includes(chatId.toString())) {
+    return;
+  }
+
+  // Check if the user is banned
+  if (bannedUsers[chatId]) {
+    bot.sendMessage(chatId, '*You are banned from using this bot.*', { parse_mode: 'Markdown' });
     return;
   }
 
@@ -217,6 +224,90 @@ bot.onText(/\/admin/, (msg) => {
 
       bot.sendMessage(chatId, response || '*No users found.*', { parse_mode: 'Markdown' });
     });
+  } else {
+    bot.sendMessage(chatId, '*You are not authorized to use this command.*', { parse_mode: 'Markdown' });
+  }
+});
+
+// Ban a user
+bot.onText(/\/ban (.+)/, (msg, match) => {
+  const chatId = msg.chat.id;
+  const target = match[1];
+
+  if (adminChatIds.includes(chatId.toString())) {
+    let targetChatId = target;
+    if (isNaN(target)) {
+      // If the target is a username, look up the user ID
+      db.ref('users').once('value', (snapshot) => {
+        let found = false;
+        snapshot.forEach((childSnapshot) => {
+          const user = childSnapshot.val();
+          if (user.name === target) {
+            targetChatId = childSnapshot.key;
+            found = true;
+          }
+        });
+        if (found) {
+          bannedUsers[targetChatId] = true;
+          bot.sendMessage(chatId, `*User ${target} (ID: ${targetChatId}) has been banned.*`, { parse_mode: 'Markdown' });
+        } else {
+          bot.sendMessage(chatId, '*User not found.*', { parse_mode: 'Markdown' });
+        }
+      });
+    } else {
+      bannedUsers[targetChatId] = true;
+      bot.sendMessage(chatId, `*User with ID ${targetChatId} has been banned.*`, { parse_mode: 'Markdown' });
+    }
+  } else {
+    bot.sendMessage(chatId, '*You are not authorized to use this command.*', { parse_mode: 'Markdown' });
+  }
+});
+
+// Unban a user
+bot.onText(/\/unban (.+)/, (msg, match) => {
+  const chatId = msg.chat.id;
+  const target = match[1];
+
+  if (adminChatIds.includes(chatId.toString())) {
+    let targetChatId = target;
+    if (isNaN(target)) {
+      // If the target is a username, look up the user ID
+      db.ref('users').once('value', (snapshot) => {
+        let found = false;
+        snapshot.forEach((childSnapshot) => {
+          const user = childSnapshot.val();
+          if (user.name === target) {
+            targetChatId = childSnapshot.key;
+            found = true;
+          }
+        });
+        if (found) {
+          delete bannedUsers[targetChatId];
+          bot.sendMessage(chatId, `*User ${target} (ID: ${targetChatId}) has been unbanned.*`, { parse_mode: 'Markdown' });
+        } else {
+          bot.sendMessage(chatId, '*User not found.*', { parse_mode: 'Markdown' });
+        }
+      });
+    } else {
+      delete bannedUsers[targetChatId];
+      bot.sendMessage(chatId, `*User with ID ${targetChatId} has been unbanned.*`, { parse_mode: 'Markdown' });
+    }
+  } else {
+    bot.sendMessage(chatId, '*You are not authorized to use this command.*', { parse_mode: 'Markdown' });
+  }
+});
+
+// List all banned users
+bot.onText(/\/banned/, (msg) => {
+  const chatId = msg.chat.id;
+
+  if (adminChatIds.includes(chatId.toString())) {
+    let response = '*Banned Users:*\n\n';
+    for (const userId in bannedUsers) {
+      response += `*ID: ${userId}*\n`;
+    }
+
+    bot.sendMessage(chatId, response || '*No banned users found.*', { parse_mode: 'Markdown' });
   } else {
     bot.sendMessage(chatId, '*You are not authorized to use this command.*', { parse_mode: 'Markdown' });
   }
