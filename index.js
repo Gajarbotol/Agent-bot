@@ -28,6 +28,11 @@ const welcomeMessage = `👇👇 আমাদের সার্ভিস 👇�
 
 📢 আমরা 1xbet এর Verified এজেন্ট । অন্যদের কাছে প্রতারিত না হয়ে আমাদের সাথে লেনদেন করেন। 👇👇`;
 
+// Error handling
+bot.on('polling_error', (error) => {
+  console.error('Polling error:', error);
+});
+
 // Save user to Firebase
 const saveUser = (chatId, userFullName) => {
   db.ref(`users/${chatId}`).set({
@@ -314,6 +319,11 @@ bot.onText(/\/banned/, (msg) => {
 });
 
 const port = process.env.PORT || 3000; // Default to 3000 if PORT is not set
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.sendStatus(200);
+});
 
 // Start the Express server
 app.listen(port, () => {
