@@ -81,7 +81,15 @@ bot.on('callback_query', (callbackQuery) => {
 👇ডিপোজিট উইথড্র নিতে মেসেজ দিন 👇
 ** এগুলো দিলে ৫মিনিটের ভিতর টাকা আপনার প্লেয়ার একাউন্টে এড হয়ে যাবে ।`;
       const imageUrl = 'https://raw.githubusercontent.com/Gajarbotol/Agent-bot/main/IMG_20240804_010336_063.jpg'; // Replace with your image URL
-      bot.sendMessage(chatId, `*${depositText}*`, { parse_mode: 'Markdown' });
+      const depositOptions = {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
+          ]
+        }
+      };
+      bot.sendMessage(chatId, `*${depositText}*`, depositOptions);
       bot.sendPhoto(chatId, imageUrl);
       break;
     case 'withdraw':
