@@ -49,6 +49,12 @@ bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   const userFullName = `${msg.from.first_name} ${msg.from.last_name || ''}`.trim();
 
+  // Check if the user is banned
+  if (bannedUsers[chatId]) {
+    bot.sendMessage(chatId, '*You are banned from using this bot.*', { parse_mode: 'Markdown' });
+    return;
+  }
+
   saveUser(chatId, userFullName);
 
   const options = {
@@ -69,6 +75,12 @@ bot.onText(/\/start/, (msg) => {
 bot.on('callback_query', (callbackQuery) => {
   const message = callbackQuery.message;
   const chatId = message.chat.id;
+
+  // Check if the user is banned
+  if (bannedUsers[chatId]) {
+    bot.sendMessage(chatId, '*You are banned from using this bot.*', { parse_mode: 'Markdown' });
+    return;
+  }
 
   switch (callbackQuery.data) {
     case 'deposit':
