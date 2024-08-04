@@ -114,6 +114,8 @@ bot.on('callback_query', (callbackQuery) => {
   }
 });
 
+const lastSentTimes = {};
+
 // Handle user messages
 bot.on('message', (msg) => {
   const chatId = msg.chat.id;
@@ -125,29 +127,35 @@ bot.on('message', (msg) => {
 
   if (msg.text && !msg.text.startsWith('/')) {
     const userFullName = `${msg.from.first_name} ${msg.from.last_name || ''}`.trim();
+    const now = Date.now();
+    const fifteenMinutes = 15 * 60 * 1000;
 
-    // Forward the user message to admin chat IDs and store metadata
-    adminChatIds.forEach(adminChatId => {
-      bot.forwardMessage(adminChatId, chatId, msg.message_id).then((forwardedMsg) => {
-        // Store metadata in Firebase
-        db.ref(`messages/${forwardedMsg.message_id}`).set({
-          originalChatId: chatId,
-          originalMessageId: msg.message_id,
-          userFullName: userFullName,
-          text: msg.text,
-          timestamp: Date.now()
+    if (!lastSentTimes[chatId] || (now - lastSentTimes[chatId]) > fifteenMinutes) {
+      // Forward the user message to admin chat IDs and store metadata
+      adminChatIds.forEach(adminChatId => {
+        bot.forwardMessage(adminChatId, chatId, msg.message_id).then((forwardedMsg) => {
+          // Store metadata in Firebase
+          db.ref(`messages/${forwardedMsg.message_id}`).set({
+            originalChatId: chatId,
+            originalMessageId: msg.message_id,
+            userFullName: userFullName,
+            text: msg.text,
+            timestamp: Date.now()
+          });
         });
       });
-    });
 
-    bot.sendMessage(chatId, `*${userFullName} শীঘ্রই এজেন্ট রিপ্লাই দেবে, একটু অপেক্ষা করুন 😊*`, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }] // Replace with your admin contact link
-        ]
-      }
-    });
+      bot.sendMessage(chatId, `*${userFullName} শীঘ্রই এজেন্ট রিপ্লাই দেবে, একটু অপেক্ষা করুন 😊*`, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }] // Replace with your admin contact link
+          ]
+        }
+      });
+
+      lastSentTimes[chatId] = now;
+    }
   }
 });
 
