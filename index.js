@@ -1,12 +1,11 @@
-const express = require('express');
-const bodyParser = require('body-parser');
 const TelegramBot = require('node-telegram-bot-api');
 const admin = require('firebase-admin');
 const serviceAccount = require('./firebase-service-account.json'); // Path to your Firebase service account JSON
+const express = require('express');
+const app = express();
 
 const token = process.env.TELEGRAM_BOT_TOKEN; // Use environment variable for bot token
 const adminChatIds = [process.env.ADMIN_CHAT_ID_1, process.env.ADMIN_CHAT_ID_2]; // Use environment variables for admin chat IDs
-const webhookUrl = process.env.WEBHOOK_URL; // Your webhook URL
 
 // Initialize Firebase
 admin.initializeApp({
@@ -15,19 +14,7 @@ admin.initializeApp({
 });
 
 const db = admin.database();
-const bot = new TelegramBot(token);
-
-// Set up the webhook
-bot.setWebHook(`${webhookUrl}/bot${token}`);
-
-// Express app setup
-const app = express();
-app.use(bodyParser.json());
-
-app.post(`/bot${token}`, (req, res) => {
-  bot.processUpdate(req.body);
-  res.sendStatus(200);
-});
+const bot = new TelegramBot(token, { polling: true });
 
 const welcomeMessage = `👇👇 আমাদের সার্ভিস 👇👇
 
@@ -216,7 +203,9 @@ bot.onText(/\/admin/, (msg) => {
   }
 });
 
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3000; // Default to 3000 if PORT is not set
+
+// Start the Express server
 app.listen(port, () => {
-  console.log(`Bot is listening on port ${port}`);
+  console.log(`Server is running on port ${port}`);
 });
