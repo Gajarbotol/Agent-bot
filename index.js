@@ -97,7 +97,7 @@ bot.on('callback_query', (callbackQuery) => {
 📢 চার্জ 0%, সেন্ডমানি যত দিবেন তত পাবেন।
 👇ডিপোজিট উইথড্র নিতে মেসেজ দিন 👇
 ** এগুলো দিলে ৫মিনিটের ভিতর টাকা আপনার প্লেয়ার একাউন্টে এড হয়ে যাবে ।`;
-      const imageUrl = 'https://raw.githubusercontent.com/Gajarbotol/Agent-bot/main/IMG_20240804_010336_063.jpg'; // Replace with your image URL
+      const imageUrl = 'https://github.com/Gajarbotol/wpcrack/blob/main/IMG_20240804_010336_063.jpg?raw=true'; // Replace with your image URL
       const depositOptions = {
         parse_mode: 'Markdown',
         reply_markup: {
@@ -123,7 +123,7 @@ bot.on('callback_query', (callbackQuery) => {
       bot.sendMessage(chatId, 'একাউন্ট তৈরি করতে এডমিনের সাথে যোগাযোগ করুন', {
         reply_markup: {
           inline_keyboard: [
-            [{ text: 'এডমিনের সাথে যোগাযোগ', url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
+            [{ text: 'এডমিনের সাথে যোগাযোগ', url: 'https://SAHARIYEREFTY.t.me' }]
           ]
         }
       });
