@@ -131,7 +131,6 @@ bot.on('callback_query', (callbackQuery) => {
   }
 });
 
-const lastSentTimes = {};
 const bannedUsers = {}; // To store banned users
 
 // Handle user messages
@@ -151,35 +150,29 @@ bot.on('message', (msg) => {
 
   if (msg.text && !msg.text.startsWith('/')) {
     const userFullName = `${msg.from.first_name} ${msg.from.last_name || ''}`.trim();
-    const now = Date.now();
-    const fifteenMinutes = 15 * 60 * 1000;
 
-    if (!lastSentTimes[chatId] || (now - lastSentTimes[chatId]) > fifteenMinutes) {
-      // Forward the user message to admin chat IDs and store metadata
-      adminChatIds.forEach(adminChatId => {
-        bot.forwardMessage(adminChatId, chatId, msg.message_id).then((forwardedMsg) => {
-          // Store metadata in Firebase
-          db.ref(`messages/${forwardedMsg.message_id}`).set({
-            originalChatId: chatId,
-            originalMessageId: msg.message_id,
-            userFullName: userFullName,
-            text: msg.text,
-            timestamp: Date.now()
-          });
+    // Forward the user message to admin chat IDs and store metadata
+    adminChatIds.forEach(adminChatId => {
+      bot.forwardMessage(adminChatId, chatId, msg.message_id).then((forwardedMsg) => {
+        // Store metadata in Firebase
+        db.ref(`messages/${forwardedMsg.message_id}`).set({
+          originalChatId: chatId,
+          originalMessageId: msg.message_id,
+          userFullName: userFullName,
+          text: msg.text,
+          timestamp: Date.now()
         });
       });
+    });
 
-      bot.sendMessage(chatId, `*${userFullName} শীঘ্রই এজেন্ট রিপ্লাই দেবে, একটু অপেক্ষা করুন 😊*`, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }] // Replace with your admin contact link
-          ]
-        }
-      });
-
-      lastSentTimes[chatId] = now;
-    }
+    bot.sendMessage(chatId, `*${userFullName} শীঘ্রই এজেন্ট রিপ্লাই দেবে, একটু অপেক্ষা করুন 😊*`, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
+        ]
+      }
+    });
   }
 });
 
@@ -201,7 +194,6 @@ bot.on('message', (msg) => {
       const data = snapshot.val();
       if (data) {
         const originalChatId = data.originalChatId;
-        const originalMessageId = data.originalMessageId;
 
         // Send the admin's reply to the original sender
         bot.sendMessage(originalChatId, `*${msg.text}*`, { parse_mode: 'Markdown' });
