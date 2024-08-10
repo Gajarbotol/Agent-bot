@@ -28,6 +28,9 @@ const welcomeMessage = `👇👇 আমাদের সার্ভিস 👇�
 
 📢 আমরা 1xbet এর Verified এজেন্ট । অন্যদের কাছে প্রতারিত না হয়ে আমাদের সাথে লেনদেন করেন। 👇👇`;
 
+const bannedUsers = {}; // To store banned users
+const lastReplyTimes = {}; // To store the last reply times
+
 // Error handling
 bot.on('polling_error', (error) => {
   console.error('Polling error:', error);
@@ -131,8 +134,6 @@ bot.on('callback_query', (callbackQuery) => {
   }
 });
 
-const bannedUsers = {}; // To store banned users
-
 // Handle user messages
 bot.on('message', (msg) => {
   const chatId = msg.chat.id;
@@ -165,14 +166,21 @@ bot.on('message', (msg) => {
       });
     });
 
-    bot.sendMessage(chatId, `*${userFullName} শীঘ্রই এজেন্ট রিপ্লাই দেবে, একটু অপেক্ষা করুন 😊*`, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
-        ]
-      }
-    });
+    // Check if the last reply was sent more than 15 minutes ago
+    const now = Date.now();
+    const lastReplyTime = lastReplyTimes[chatId] || 0;
+
+    if (now - lastReplyTime > 15 * 60 * 1000) {
+      bot.sendMessage(chatId, `*${userFullName} শীঘ্রই এজেন্ট রিপ্লাই দেবে, একটু অপেক্ষা করুন 😊*`, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
+          ]
+        }
+      });
+      lastReplyTimes[chatId] = now; // Update the last reply time
+    }
   }
 });
 
@@ -220,15 +228,15 @@ bot.onText(/\/broadcast (.+)/, (msg, match) => {
 });
 
 // List all users
-bot.onText(/\/admin/, (msg) => {
+bot.onText(/\/list/, (msg) => {
   const chatId = msg.chat.id;
 
   if (adminChatIds.includes(chatId.toString())) {
     db.ref('users').once('value', (snapshot) => {
-      let response = '*Users:*\n\n';
+      let response = '*Registered Users:*\n\n';
       snapshot.forEach((childSnapshot) => {
         const user = childSnapshot.val();
-        response += `*${user.name} (ID: ${childSnapshot.key})*\n`;
+        response += `*Name:* ${user.name}\n*ID:* ${childSnapshot.key}\n\n`;
       });
 
       bot.sendMessage(chatId, response || '*No users found.*', { parse_mode: 'Markdown' });
