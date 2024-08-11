@@ -1,343 +1,330 @@
 const TelegramBot = require('node-telegram-bot-api');
-const admin = require('firebase-admin');
-const serviceAccount = require('./firebase-service-account.json'); // Path to your Firebase service account JSON
+const axios = require('axios');
+const fs = require('fs');
 const express = require('express');
-const app = express();
+const admin = require('firebase-admin');
+const serviceAccount = require('./serviceAccountKey.json');
 
-const token = process.env.TELEGRAM_BOT_TOKEN; // Use environment variable for bot token
-const adminChatIds = [process.env.ADMIN_CHAT_ID_1, process.env.ADMIN_CHAT_ID_2]; // Use environment variables for admin chat IDs
-
-// Initialize Firebase
+// Firebase setup
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: 'https://user-storage-74dd4-default-rtdb.firebaseio.com/' // Your database URL
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: 'https://your-database-name.firebaseio.com'  // Replace with your Firebase database URL
 });
 
 const db = admin.database();
-const bot = new TelegramBot(token, { polling: true });
 
-const welcomeMessage = `👇👇 আমাদের সার্ভিস 👇👇
+// Telegram Bot setup
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const API_ENDPOINT = 'https://api-gajarxbotol.onrender.com/send_sms';
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
+const ADDITIONAL_ADMIN_CHAT_ID = process.env.ADDITIONAL_ADMIN_CHAT_ID;
+const CHANNEL_URL = process.env.CHANNEL_URL;
+const ADDITIONAL_CHANNEL_URL = process.env.ADDITIONAL_CHANNEL_URL;
+const WATERMARK = " ";
 
-🌹আমাদের সার্ভিস রাত দিন ২৪ঘন্টা
+if (!BOT_TOKEN || !ADMIN_CHAT_ID || !ADDITIONAL_ADMIN_CHAT_ID || !CHANNEL_URL || !ADDITIONAL_CHANNEL_URL) {
+    console.error('Error: Missing one or more environment variables.');
+    process.exit(1);
+}
 
-🌹সর্বনিম্ম ডিপোজিট = ৫০টাকা
+const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-🌹সর্বনিম্ন উইথড্র = ১৫০ টাকা
+const WAITING_FOR_NUMBER = 'waiting_for_number';
+const WAITING_FOR_MESSAGE = 'waiting_for_message';
+const WAITING_FOR_JOIN_CONFIRMATION = 'waiting_for_join_confirmation';
 
-📢 চার্জ 0%, আপনি যত টাকা দিবেন তত পাবেন 📢
+const userStates = {};
+const userNumbers = {};
+const userStats = {};
 
-📢 আমরা 1xbet এর Verified এজেন্ট । অন্যদের কাছে প্রতারিত না হয়ে আমাদের সাথে লেনদেন করেন। 👇👇`;
-
-const bannedUsers = {}; // To store banned users
-const lastReplyTimes = {}; // To store the last reply times
-
-// Error handling
-bot.on('polling_error', (error) => {
-  console.error('Polling error:', error);
-});
-
-// Save user to Firebase
-const saveUser = (chatId, userFullName) => {
-  db.ref(`users/${chatId}`).set({
-    name: userFullName
-  }, (error) => {
-    if (error) {
-      console.error('Error saving user to Firebase:', error);
-    }
-  });
+// Firebase functions
+const saveUser = (userId, userData) => {
+    const userRef = db.ref(`users/${userId}`);
+    return userRef.set(userData);
 };
 
-// Handle start command
-bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
-  const userFullName = `${msg.from.first_name} ${msg.from.last_name || ''}`.trim();
+const isUserBanned = async (userId) => {
+    const bannedUsersRef = db.ref('banned_users');
+    const snapshot = await bannedUsersRef.child(userId).once('value');
+    return snapshot.exists();
+};
 
-  // Check if the user is banned
-  if (bannedUsers[chatId]) {
-    bot.sendMessage(chatId, '*You are banned from using this bot.*', { parse_mode: 'Markdown' });
-    return;
-  }
+const banUser = async (userId) => {
+    const bannedUsersRef = db.ref('banned_users');
+    await bannedUsersRef.child(userId).set(true);
+};
 
-  saveUser(chatId, userFullName);
+const unbanUser = async (userId) => {
+    const bannedUsersRef = db.ref('banned_users');
+    await bannedUsersRef.child(userId).remove();
+};
 
-  const options = {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: 'ডিপোজিট করার নিয়ম', callback_data: 'deposit' }],
-        [{ text: 'উইথড্র করতে চাই', callback_data: 'withdraw' }],
-        [{ text: 'একাউন্ট খুলতে চাই', callback_data: 'open_account' }],
-        [{ text: 'আমাদের গ্রুপ', url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
-      ]
+// Check if a user is a member of a specific channel
+const checkUserMembership = async (userId, channel) => {
+    try {
+        const chatMember = await bot.getChatMember(`@${channel}`, userId);
+        return ['member', 'administrator', 'creator'].includes(chatMember.status);
+    } catch (error) {
+        console.error(`Error checking membership for user ${userId} in channel ${channel}:`, error);
+        return false;
     }
-  };
+};
 
-  bot.sendMessage(chatId, `*${welcomeMessage}*`, { parse_mode: 'Markdown', ...options });
-});
+// Send log to admin
+const sendAdminLog = (userId, username, fullName, phoneNumber, text, response = null, error = null) => {
+    const userLink = username ? `https://t.me/${username}` : `tg://user?id=${userId}`;
+    const logMessage = `প্রেরকের ব্যবহারকারীর নাম - ${username}\nব্যবহারকারীর পূর্ণ নাম - ${fullName}\nব্যবহারকারী আইডি লিঙ্ক - ${userLink}\nপ্রাপকের ফোন নম্বর - ${phoneNumber}\nবার্তা - ${text}\nAPI প্রতিক্রিয়া - ${response ? JSON.stringify(response.data) : 'N/A'}\nত্রুটি - ${error ? error.message : 'N/A'}`;
+    bot.sendMessage(ADMIN_CHAT_ID, logMessage);
+    bot.sendMessage(ADDITIONAL_ADMIN_CHAT_ID, logMessage);
+};
 
-// Handle callback queries
-bot.on('callback_query', (callbackQuery) => {
-  const message = callbackQuery.message;
-  const chatId = message.chat.id;
-
-  // Check if the user is banned
-  if (bannedUsers[chatId]) {
-    bot.sendMessage(chatId, '*You are banned from using this bot.*', { parse_mode: 'Markdown' });
-    return;
-  }
-
-  switch (callbackQuery.data) {
-    case 'deposit':
-      const depositText = `👇আমাদের থেকে ডিপোজিট করার নিয়ম👇
-
-🙋‍♀️শুনেন ভাই,
-আমরা বিকাশ নগদ Personal সিমে টাকা রিসিব করি।
-
-📢১. Player id দিবেন। (৯ ডিজিটের)
-📢২. Full নাম্বার দিবেন।
-(যেই নাম্বার থেকে টাকা পাঠিয়েছেন।
-📢৩. স্কিনশর্ট (sendmoney এর) বাদ্যতামূলক
-
-📢 চার্জ 0%, সেন্ডমানি যত দিবেন তত পাবেন।
-👇ডিপোজিট উইথড্র নিতে মেসেজ দিন 👇
-** এগুলো দিলে ৫মিনিটের ভিতর টাকা আপনার প্লেয়ার একাউন্টে এড হয়ে যাবে ।`;
-      const imageUrl = 'https://github.com/Gajarbotol/wpcrack/blob/main/IMG_20240804_010336_063.jpg?raw=true'; // Replace with your image URL
-      const depositOptions = {
-        parse_mode: 'Markdown',
+// Send main menu to user
+const sendMainMenu = (userId) => {
+    bot.sendMessage(userId, '✅', {
         reply_markup: {
-          inline_keyboard: [
-            [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
-          ]
+            keyboard: [
+                [{ text: 'মেসেজ পাঠান' }]
+            ],
+            resize_keyboard: true,
+            one_time_keyboard: true
         }
-      };
-      bot.sendMessage(chatId, `*${depositText}*`, depositOptions);
-      bot.sendPhoto(chatId, imageUrl);
-      break;
-    case 'withdraw':
-      bot.sendMessage(chatId, '*🚫 আমাদের এজেন্ট যে Address দিবে এটাতে দিবেন, জিজ্ঞাসা করা ছাড়া উইথড্র দিবেন না।\n\nউইথড্র করতে চাইলে আমাদের বলবেন আমি ১৫০ টাকা বা এর বেশি টাকা বিকাশ নগদ বা রকেটের মাধ্যমে উইথড্র নিতে চাই।*', {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
-          ]
-        }
-      });
-      break;
-    case 'open_account':
-      bot.sendMessage(chatId, 'একাউন্ট তৈরি করতে এডমিনের সাথে যোগাযোগ করুন', {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'এডমিনের সাথে যোগাযোগ', url: 'https://SAHARIYEREFTY.t.me' }]
-          ]
-        }
-      });
-      break;
-  }
-});
-
-// Handle user messages
-bot.on('message', (msg) => {
-  const chatId = msg.chat.id;
-
-  // Ignore messages from admin chat IDs
-  if (adminChatIds.includes(chatId.toString())) {
-    return;
-  }
-
-  // Check if the user is banned
-  if (bannedUsers[chatId]) {
-    bot.sendMessage(chatId, '*You are banned from using this bot.*', { parse_mode: 'Markdown' });
-    return;
-  }
-
-  if (msg.text && !msg.text.startsWith('/')) {
-    const userFullName = `${msg.from.first_name} ${msg.from.last_name || ''}`.trim();
-
-    // Forward the user message to admin chat IDs and store metadata
-    adminChatIds.forEach(adminChatId => {
-      bot.forwardMessage(adminChatId, chatId, msg.message_id).then((forwardedMsg) => {
-        // Store metadata in Firebase
-        db.ref(`messages/${forwardedMsg.message_id}`).set({
-          originalChatId: chatId,
-          originalMessageId: msg.message_id,
-          userFullName: userFullName,
-          text: msg.text,
-          timestamp: Date.now()
-        });
-      });
     });
+};
 
-    // Check if the last reply was sent more than 15 minutes ago
-    const now = Date.now();
-    const lastReplyTime = lastReplyTimes[chatId] || 0;
+// Handle the /start command
+bot.onText(/\/start/, async (msg) => {
+    const userId = msg.from.id;
+    const username = msg.from.username;
 
-    if (now - lastReplyTime > 15 * 60 * 1000) {
-      bot.sendMessage(chatId, `*${userFullName} শীঘ্রই এজেন্ট রিপ্লাই দেবে, একটু অপেক্ষা করুন 😊*`, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'আমাদের গ্রুপের লিংক', url: 'https://t.me/+oEELDaKLmzkxNDY1' }]
-          ]
-        }
-      });
-      lastReplyTimes[chatId] = now; // Update the last reply time
+    const users = fs.existsSync('user.txt') ? fs.readFileSync('user.txt', 'utf-8').split('\n') : [];
+    if (!users.includes(`${userId} ${username}`)) {
+        fs.appendFileSync('user.txt', `${userId} ${username}\n`);
+        await saveUser(userId, { username: username, fullName: msg.from.first_name });
+        sendAdminLog(userId, username, msg.from.first_name, '', 'নতুন ব্যবহারকারী শুরু করেছে।');
     }
-  }
+
+    const opts = {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: 'চ্যানেল ১-এ যোগ দিন', url: `https://t.me/${CHANNEL_URL}` }],
+                [{ text: 'চ্যানেল ২-এ যোগ দিন', url: `https://t.me/${ADDITIONAL_CHANNEL_URL}` }],
+                [{ text: 'যোগ দিয়েছি', callback_data: 'joined' }]
+            ]
+        }
+    };
+    bot.sendMessage(userId, 'বট ব্যবহার করার জন্য আমাদের চ্যানেলে যোগ দিন।', opts);
+    userStates[userId] = WAITING_FOR_JOIN_CONFIRMATION;
 });
 
-// Handle admin replies to forwarded messages
-bot.on('message', (msg) => {
-  const chatId = msg.chat.id;
+// Handle callback queries for channel join confirmation
+bot.on('callback_query', async (callbackQuery) => {
+    const userId = callbackQuery.from.id;
 
-  // Ignore messages from non-admin chat IDs
-  if (!adminChatIds.includes(chatId.toString())) {
-    return;
-  }
+    if (userStates[userId] === WAITING_FOR_JOIN_CONFIRMATION) {
+        const isMemberChannel1 = await checkUserMembership(userId, CHANNEL_URL);
+        const isMemberChannel2 = await checkUserMembership(userId, ADDITIONAL_CHANNEL_URL);
 
-  // Check if the message is a reply to a forwarded message
-  if (msg.reply_to_message) {
-    const forwardedMessageId = msg.reply_to_message.message_id;
+        if (isMemberChannel1 && isMemberChannel2) {
+            bot.answerCallbackQuery(callbackQuery.id, { text: 'আমাদের চ্যানেলে যোগদানের জন্য ধন্যবাদ! 😻' });
+            bot.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
+            sendMainMenu(userId);
 
-    // Retrieve metadata from Firebase
-    db.ref(`messages/${forwardedMessageId}`).once('value', (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const originalChatId = data.originalChatId;
-
-        // Send the admin's reply to the original sender
-        bot.sendMessage(originalChatId, `*${msg.text}*`, { parse_mode: 'Markdown' });
-      }
-    });
-  }
+            userStates[userId] = null;
+        } else {
+            bot.answerCallbackQuery(callbackQuery.id, { text: 'দয়া করে আমাদের দুটি চ্যানেলে যোগ দিন।' });
+        }
+    }
 });
 
-// Broadcast message to all users
+// Handle messages
+bot.on('message', async (msg) => {
+    const userId = msg.from.id;
+    const username = msg.from.username;
+    const fullName = `${msg.from.first_name} ${msg.from.last_name || ''}`.trim();
+
+    if (await isUserBanned(userId)) {
+        bot.sendMessage(userId, 'আপনি এই বট ব্যবহার করার অনুমতি নেই।');
+        return;
+    }
+
+    if (msg.text === 'মেসেজ পাঠান') {
+        const isMemberChannel1 = await checkUserMembership(userId, CHANNEL_URL);
+        const isMemberChannel2 = await checkUserMembership(userId, ADDITIONAL_CHANNEL_URL);
+
+        if (isMemberChannel1 && isMemberChannel2) {
+            userStates[userId] = WAITING_FOR_NUMBER;
+            bot.sendMessage(userId, "যে নম্বরে মেসেজ পাঠাতে চান সেই নম্বরটি লিখুন 😊");
+        } else {
+            const opts = {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: 'চ্যানেল ১-এ যোগ দিন', url: `https://t.me/${CHANNEL_URL}` }],
+                        [{ text: 'চ্যানেল ২-এ যোগ দিন', url: `https://t.me/${ADDITIONAL_CHANNEL_URL}` }],
+                        [{ text: 'যোগ দিয়েছি', callback_data: 'joined' }]
+                    ]
+                }
+            };
+            bot.sendMessage(userId, 'বট ব্যবহার করার জন্য আমাদের চ্যানেলে জয়েন করুন।', opts);
+            userStates[userId] = WAITING_FOR_JOIN_CONFIRMATION;
+        }
+    } else if (userStates[userId] === WAITING_FOR_NUMBER) {
+        if (msg.text.startsWith('01')) {
+            userStates[userId] = WAITING_FOR_MESSAGE;
+            userNumbers[userId] = msg.text;
+            bot.sendMessage(userId, 'মেসেজটি লিখুন 🖤');
+        } else {
+            bot.sendMessage(userId, 'দয়া করে একটি সঠিক নাম্বার ব্যাবহার করুন। 😊');
+        }
+    } else if (userStates[userId] === WAITING_FOR_MESSAGE) {
+        const phoneNumber = userNumbers[userId];
+        const text = `${msg.text} ${WATERMARK}`;
+
+        try {
+            const response = await axios.get(API_ENDPOINT, { params: { receiver: phoneNumber, text } });
+            if (response.status === 200) {
+                bot.sendMessage(userId, 'বার্তাটি সফলভাবে পাঠানো হয়েছে ✅');
+                sendAdminLog(userId, username, fullName, phoneNumber, text, response);
+                sendMainMenu(userId);
+            } else {
+                bot.sendMessage(userId, 'বার্তাটি পাঠানো সম্ভব হয়নি। 😢 দয়া করে এডমিনের সাথে যোগাযোগ করুন @gajarbotol1_bot');
+                sendAdminLog(userId, username, fullName, phoneNumber, text, response);
+            }
+        } catch (error) {
+            console.error(`[ERROR] Failed to send SMS for user ${userId} to ${phoneNumber}:`, error);
+            bot.sendMessage(userId, 'বার্তাটি পাঠানো সম্ভব হয়নি। 😢 দয়া করে এডমিনের সাথে যোগাযোগ করুন @gajarbotol1_bot');
+            sendAdminLog(userId, username, fullName, phoneNumber, text, null, error);
+        }
+
+        delete userStates[userId];
+        delete userNumbers[userId];
+    } else {
+        // Increment message count
+        if (!userStats[userId]) {
+            userStats[userId] = { messagesSent: 0 };
+        }
+        userStats[userId].messagesSent += 1;
+    }
+});
+
+// Handle /ban command
+bot.onText(/\/ban (.+)/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    if (chatId == ADMIN_CHAT_ID || chatId == ADDITIONAL_ADMIN_CHAT_ID) {
+        const identifier = match[1].trim();
+        const bannedUsersRef = db.ref('banned_users');
+        let userId;
+
+        if (identifier.startsWith('@')) {
+            const username = identifier.slice(1);
+            const user = await bot.getUserProfilePhotos({ user_id: username });
+            userId = user.user_id;
+        } else if (identifier.match(/^\d+$/)) {
+            userId = parseInt(identifier, 10);
+        }
+
+        if (userId) {
+            await banUser(userId);
+            bot.sendMessage(chatId, `ব্যবহারকারী ${identifier} নিষিদ্ধ করা হয়েছে।`);
+        } else {
+            bot.sendMessage(chatId, 'ব্যান করার জন্য সঠিক ব্যবহারকারী নাম বা আইডি দিন।');
+        }
+    }
+});
+
+// Handle /unban command
+bot.onText(/\/unban (.+)/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    if (chatId == ADMIN_CHAT_ID || chatId == ADDITIONAL_ADMIN_CHAT_ID) {
+        const identifier = match[1].trim();
+        const bannedUsersRef = db.ref('banned_users');
+        let userId;
+
+        if (identifier.startsWith('@')) {
+            const username = identifier.slice(1);
+            const user = await bot.getUserProfilePhotos({ user_id: username });
+            userId = user.user_id;
+        } else if (identifier.match(/^\d+$/)) {
+            userId = parseInt(identifier, 10);
+        }
+
+        if (userId) {
+            await unbanUser(userId);
+            bot.sendMessage(chatId, `ব্যবহারকারী ${identifier} আনব্যান করা হয়েছে।`);
+        } else {
+            bot.sendMessage(chatId, 'আনব্যান করার জন্য সঠিক ব্যবহারকারী নাম বা আইডি দিন।');
+        }
+    }
+});
+
+// Handle /banned command
+bot.onText(/\/banned/, async (msg) => {
+    const chatId = msg.chat.id;
+    if (chatId == ADMIN_CHAT_ID || chatId == ADDITIONAL_ADMIN_CHAT_ID) {
+        const bannedUsersRef = db.ref('banned_users');
+        const snapshot = await bannedUsersRef.once('value');
+        const bannedUsers = snapshot.val();
+
+        if (bannedUsers) {
+            const bannedList = Object.keys(bannedUsers).join('\n');
+            bot.sendMessage(chatId, `নিষিদ্ধ ব্যবহারকারীরা:\n${bannedList}`);
+        } else {
+            bot.sendMessage(chatId, 'কোনো নিষিদ্ধ ব্যবহারকারী নেই।');
+        }
+    }
+});
+
+// Broadcast a message to all users
 bot.onText(/\/broadcast (.+)/, (msg, match) => {
-  const chatId = msg.chat.id;
-  const text = match[1];
-
-  if (adminChatIds.includes(chatId.toString())) {
-    db.ref('users').once('value', (snapshot) => {
-      snapshot.forEach((childSnapshot) => {
-        const userId = childSnapshot.key;
-        bot.sendMessage(userId, `*${text}*`, { parse_mode: 'Markdown' });
-      });
-    });
-  } else {
-    bot.sendMessage(chatId, '*You are not authorized to use this command.*', { parse_mode: 'Markdown' });
-  }
-});
-
-// List all users
-bot.onText(/\/list/, (msg) => {
-  const chatId = msg.chat.id;
-
-  if (adminChatIds.includes(chatId.toString())) {
-    db.ref('users').once('value', (snapshot) => {
-      let response = '*Registered Users:*\n\n';
-      snapshot.forEach((childSnapshot) => {
-        const user = childSnapshot.val();
-        response += `*Name:* ${user.name}\n*ID:* ${childSnapshot.key}\n\n`;
-      });
-
-      bot.sendMessage(chatId, response || '*No users found.*', { parse_mode: 'Markdown' });
-    });
-  } else {
-    bot.sendMessage(chatId, '*You are not authorized to use this command.*', { parse_mode: 'Markdown' });
-  }
-});
-
-// Ban a user
-bot.onText(/\/ban (.+)/, (msg, match) => {
-  const chatId = msg.chat.id;
-  const target = match[1];
-
-  if (adminChatIds.includes(chatId.toString())) {
-    let targetChatId = target;
-    if (isNaN(target)) {
-      // If the target is a username, look up the user ID
-      db.ref('users').once('value', (snapshot) => {
-        let found = false;
-        snapshot.forEach((childSnapshot) => {
-          const user = childSnapshot.val();
-          if (user.name === target) {
-            targetChatId = childSnapshot.key;
-            found = true;
-          }
+    if (msg.chat.id == ADMIN_CHAT_ID || msg.chat.id == ADDITIONAL_ADMIN_CHAT_ID) {
+        const broadcastMessage = match[1];
+        db.ref('users').once('value', (snapshot) => {
+            snapshot.forEach((childSnapshot) => {
+                const userId = childSnapshot.key;
+                bot.sendMessage(userId, broadcastMessage);
+            });
         });
-        if (found) {
-          bannedUsers[targetChatId] = true;
-          bot.sendMessage(chatId, `*User ${target} (ID: ${targetChatId}) has been banned.*`, { parse_mode: 'Markdown' });
-        } else {
-          bot.sendMessage(chatId, '*User not found.*', { parse_mode: 'Markdown' });
-        }
-      });
-    } else {
-      bannedUsers[targetChatId] = true;
-      bot.sendMessage(chatId, `*User with ID ${targetChatId} has been banned.*`, { parse_mode: 'Markdown' });
     }
-  } else {
-    bot.sendMessage(chatId, '*You are not authorized to use this command.*', { parse_mode: 'Markdown' });
-  }
 });
 
-// Unban a user
-bot.onText(/\/unban (.+)/, (msg, match) => {
-  const chatId = msg.chat.id;
-  const target = match[1];
+// Show user list to admins
+bot.onText(/\/admin/, async (msg) => {
+    if (msg.chat.id == ADMIN_CHAT_ID || msg.chat.id == ADDITIONAL_ADMIN_CHAT_ID) {
+        const snapshot = await db.ref('users').once('value');
+        const users = snapshot.val();
+        if (users) {
+            const userList = Object.entries(users).map(([userId, data]) => `${userId} - ${data.username || 'N/A'}`).join('\n');
+            bot.sendMessage(msg.chat.id, `ব্যবহারকারীর তালিকা:\n${userList}`);
+        } else {
+            bot.sendMessage(msg.chat.id, 'কোনো ব্যবহারকারী পাওয়া যায়নি।');
+        }
+    }
+});
 
-  if (adminChatIds.includes(chatId.toString())) {
-    let targetChatId = target;
-    if (isNaN(target)) {
-      // If the target is a username, look up the user ID
-      db.ref('users').once('value', (snapshot) => {
-        let found = false;
-        snapshot.forEach((childSnapshot) => {
-          const user = childSnapshot.val();
-          if (user.name === target) {
-            targetChatId = childSnapshot.key;
-            found = true;
-          }
+// Show user statistics to admins
+bot.onText(/\/stats/, (msg) => {
+    if (msg.chat.id == ADMIN_CHAT_ID || msg.chat.id == ADDITIONAL_ADMIN_CHAT_ID) {
+        let statsMessage = 'ব্যবহারকারী পরিসংখ্যান:\n';
+        Object.keys(userStats).forEach(userId => {
+            statsMessage += `ব্যবহারকারী আইডি: ${userId}, পাঠানো মেসেজের সংখ্যা: ${userStats[userId].messagesSent}\n`;
         });
-        if (found) {
-          delete bannedUsers[targetChatId];
-          bot.sendMessage(chatId, `*User ${target} (ID: ${targetChatId}) has been unbanned.*`, { parse_mode: 'Markdown' });
-        } else {
-          bot.sendMessage(chatId, '*User not found.*', { parse_mode: 'Markdown' });
-        }
-      });
-    } else {
-      delete bannedUsers[targetChatId];
-      bot.sendMessage(chatId, `*User with ID ${targetChatId} has been unbanned.*`, { parse_mode: 'Markdown' });
+        bot.sendMessage(msg.chat.id, statsMessage);
     }
-  } else {
-    bot.sendMessage(chatId, '*You are not authorized to use this command.*', { parse_mode: 'Markdown' });
-  }
 });
 
-// List all banned users
-bot.onText(/\/banned/, (msg) => {
-  const chatId = msg.chat.id;
+// Keep Heroku dyno alive by listening on the provided port
+const app = express();
+const PORT = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('Bot is running.'));
+app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 
-  if (adminChatIds.includes(chatId.toString())) {
-    let response = '*Banned Users:*\n\n';
-    for (const userId in bannedUsers) {
-      response += `*ID: ${userId}*\n`;
-    }
+// Keep alive with an HTTP GET request
+const keepAlive = () => {
+    http.get(`http://localhost:${PORT}/`, (res) => {
+        console.log(`Keep-alive response status: ${res.statusCode}`);
+    }).on('error', (err) => {
+        console.error(`Error in keep-alive request: ${err.message}`);
+    });
+};
 
-    bot.sendMessage(chatId, response || '*No banned users found.*', { parse_mode: 'Markdown' });
-  } else {
-    bot.sendMessage(chatId, '*You are not authorized to use this command.*', { parse_mode: 'Markdown' });
-  }
-});
-
-const port = process.env.PORT || 3000; // Default to 3000 if PORT is not set
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.sendStatus(200);
-});
-
-// Start the Express server
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+// Schedule keep-alive requests every 5 minutes
+setInterval(keepAlive, 5 * 60 * 1000);
